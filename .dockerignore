@@ -1,0 +1,6 @@
+node_modules
+.next
+.git
+.wpp_auth
+*.log
+.DS_Store
