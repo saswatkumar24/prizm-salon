@@ -68,33 +68,50 @@ export function calculateBlockedSlots(startTimeStr: string, durationMinutes: num
 }
 
 /**
+ * Formats a Date object to YYYY-MM-DD in LOCAL timezone (preventing UTC date shift issues).
+ */
+export function getLocalTodayString(d: Date = new Date()): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Checks if a slot has already passed in time.
+ */
+export function isSlotInPast(slotTimeStr: string, dateStr: string): boolean {
+  if (!dateStr || !slotTimeStr) return false;
+  const todayStr = getLocalTodayString();
+  if (dateStr < todayStr) return true;
+  if (dateStr > todayStr) return false;
+
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const slotMinutes = timeStringToMinutes(slotTimeStr);
+  return slotMinutes <= currentMinutes;
+}
+
+/**
  * 2-HOUR ADVANCE NOTICE RULE:
- * For today's date, slots starting less than 2 hours from current local time are blocked/hidden.
- * For future dates, returns false (not restricted by 2-hour window).
+ * For today's date, slots starting less than 2 hours from current local time are blocked for online booking.
+ * For future dates, returns false.
  */
 export function isSlotRestrictedBy2HourNotice(slotTimeStr: string, dateStr: string): boolean {
   if (!dateStr || !slotTimeStr) return false;
 
-  const now = new Date();
-  
-  // Format today's date YYYY-MM-DD in local time
-  const todayStr = now.toISOString().split('T')[0];
+  const todayStr = getLocalTodayString();
 
-  // If booking is for tomorrow or future dates, 2-hour rule doesn't block it
-  if (dateStr > todayStr) {
+  // 2-hour advance notice ONLY applies to today's date
+  if (dateStr !== todayStr) {
     return false;
   }
 
-  // If booking is for past dates
-  if (dateStr < todayStr) {
-    return true;
-  }
-
-  // For today: Calculate current time in minutes + 120 minutes buffer (2 hours)
+  const now = new Date();
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
-  const cutoffMinutes = currentMinutes + 120; // 2 hours advance notice
-
+  const cutoffMinutes = currentMinutes + 120; // 2 hours from now
   const slotMinutes = timeStringToMinutes(slotTimeStr);
 
   return slotMinutes < cutoffMinutes;
 }
+

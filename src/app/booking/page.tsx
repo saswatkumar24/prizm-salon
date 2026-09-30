@@ -3,7 +3,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { SERVICES, STYLISTS, AVAILABLE_SLOTS, SALON_INFO } from '@/lib/data';
-import { isSlotRestrictedBy2HourNotice } from '@/lib/time-utils';
+import { isSlotRestrictedBy2HourNotice, getLocalTodayString, isSlotInPast } from '@/lib/time-utils';
 import { useAuth } from '@/context/AuthContext';
 import {
   CheckCircle2,
@@ -37,7 +37,7 @@ function BookingContent() {
   const [selectedStylist, setSelectedStylist] = useState(
     STYLISTS.find((s) => s.id === 'swagat') || STYLISTS[0]
   );
-  const [selectedDate, setSelectedDate] = useState('2026-09-29'); // Tuesday
+  const [selectedDate, setSelectedDate] = useState(getLocalTodayString()); // Dynamically today
   const [selectedSlot, setSelectedSlot] = useState(AVAILABLE_SLOTS[2]); // 01:15 PM
   
   // Client details - defaulted to requested test info
@@ -95,10 +95,11 @@ function BookingContent() {
           availableSlots: schData.availableSlots || [],
         });
 
-        // Valid slots must be: shift active, not taken, and not restricted by 2-hour rule
+        // Valid slots must be: shift active, not taken, not in past, and not restricted by 2-hour rule
         const validSlots = (schData.availableSlots || []).filter(
           (s: string) =>
             !taken.includes(s.trim().toUpperCase()) &&
+            !isSlotInPast(s, selectedDate) &&
             !isSlotRestrictedBy2HourNotice(s, selectedDate)
         );
 
@@ -148,6 +149,12 @@ function BookingContent() {
 
     if (!stylistShiftInfo.isWorking) {
       setErrorMsg(`${selectedStylist.name} is off-duty on this date. Please pick another date or stylist.`);
+      return;
+    }
+
+    // Check if slot has already passed
+    if (isSlotInPast(selectedSlot, selectedDate)) {
+      setErrorMsg('This time window has already passed. Please select an upcoming slot.');
       return;
     }
 
@@ -431,7 +438,7 @@ function BookingContent() {
                     type="date"
                     value={selectedDate}
                     onChange={(e) => setSelectedDate(e.target.value)}
-                    min="2026-09-28"
+                    min={getLocalTodayString()}
                     className="w-full px-3.5 py-2.5 bg-zinc-900 border border-surface-border rounded-xl text-xs text-white focus:outline-none focus:border-neon-cyan font-mono"
                   />
                 </div>
@@ -485,7 +492,7 @@ function BookingContent() {
                         <span className="w-2 h-2 rounded-full bg-red-400" /> Booked
                       </span>
                       <span className="flex items-center gap-1 text-zinc-500">
-                        <span className="w-2 h-2 rounded-full bg-zinc-600" /> Shift Closed
+                        <span className="w-2 h-2 rounded-full bg-zinc-600" /> Passed / Off Shift
                       </span>
                     </div>
                   </div>
@@ -493,11 +500,12 @@ function BookingContent() {
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                     {AVAILABLE_SLOTS.map((slot) => {
                       const isShiftActive = stylistShiftInfo.availableSlots.includes(slot);
-                      const isUnder2HourNotice = isSlotRestrictedBy2HourNotice(slot, selectedDate);
+                      const isPassed = isSlotInPast(slot, selectedDate);
+                      const isUnder2HourNotice = !isPassed && isSlotRestrictedBy2HourNotice(slot, selectedDate);
                       const isTaken = bookedSlots.includes(slot.trim().toUpperCase());
                       const slotInfo = slotDetails[slot.trim().toUpperCase()];
                       const isWalkInOccupied = isTaken && slotInfo?.isWalkIn;
-                      const isSelected = selectedSlot === slot && isShiftActive && !isTaken && !isUnder2HourNotice;
+                      const isSelected = selectedSlot === slot && isShiftActive && !isTaken && !isUnder2HourNotice && !isPassed;
 
                       if (!isShiftActive) {
                         return (
@@ -508,6 +516,21 @@ function BookingContent() {
                           >
                             <span className="line-through">{slot}</span>
                             <span className="text-[9px] text-zinc-600">Off Shift</span>
+                          </div>
+                        );
+                      }
+
+                      if (isPassed) {
+                        return (
+                          <div
+                            key={slot}
+                            title="This time window has already passed"
+                            className="py-2.5 px-3 rounded-xl border border-zinc-800/80 bg-zinc-950/70 text-zinc-600 text-xs font-mono flex items-center justify-between cursor-not-allowed opacity-40"
+                          >
+                            <span className="line-through">{slot}</span>
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-500 font-bold">
+                              Passed
+                            </span>
                           </div>
                         );
                       }

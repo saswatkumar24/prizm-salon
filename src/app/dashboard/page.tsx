@@ -11,7 +11,7 @@ import {
   WALK_IN_DURATIONS,
 } from '@/lib/data';
 import { generateWhatsAppLink } from '@/lib/whatsapp';
-import { calculateBlockedSlots } from '@/lib/time-utils';
+import { calculateBlockedSlots, getLocalTodayString } from '@/lib/time-utils';
 import { useAuth } from '@/context/AuthContext';
 import {
   Calendar as CalendarIcon,
@@ -68,7 +68,7 @@ export default function DashboardPage() {
   const [isSendingTestWa, setIsSendingTestWa] = useState(false);
 
   // Matrix date filter
-  const [selectedDate, setSelectedDate] = useState('2026-09-29');
+  const [selectedDate, setSelectedDate] = useState(getLocalTodayString());
 
   // Staff Credentials Login Form state
   const [inputUserId, setInputUserId] = useState('');
@@ -85,7 +85,7 @@ export default function DashboardPage() {
   const [walkInStylistId, setWalkInStylistId] = useState('swagat');
   const [walkInClientName, setWalkInClientName] = useState('Walk-in Client (In Chair)');
   const [walkInService, setWalkInService] = useState('Architectural Cut & Finish');
-  const [walkInDate, setWalkInDate] = useState('2026-09-29');
+  const [walkInDate, setWalkInDate] = useState(getLocalTodayString());
   const [walkInStartTime, setWalkInStartTime] = useState(AVAILABLE_SLOTS[1]); // 11:45 AM
   const [walkInDuration, setWalkInDuration] = useState(90); // 90 mins (1.5 hrs)
   const [walkInAmount, setWalkInAmount] = useState('1800');
