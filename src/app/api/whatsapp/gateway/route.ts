@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
-const GATEWAY_URL = 'http://127.0.0.1:3001';
+const GATEWAY_PORT = process.env.GATEWAY_PORT || '3001';
+const GATEWAY_URL = `http://127.0.0.1:${GATEWAY_PORT}`;
 
 export async function GET() {
   try {

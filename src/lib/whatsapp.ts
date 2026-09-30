@@ -105,6 +105,7 @@ export async function dispatchWhatsAppNotification(app: Appointment) {
   };
 
   // 0. Linked Device Gateway (Option 2 - Baileys on port 3001)
+  const gatewayUrl = `http://127.0.0.1:${process.env.GATEWAY_PORT || '3001'}`;
   try {
     const gatewayItems = [
       { to: customerPhone, text: customerMsg },
@@ -113,18 +114,24 @@ export async function dispatchWhatsAppNotification(app: Appointment) {
     ];
 
     for (const item of gatewayItems) {
-      await fetch('http://127.0.0.1:3001/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: item.to, message: item.text }),
-        signal: AbortSignal.timeout(3000),
-      }).then(r => r.json()).catch(() => null);
+      try {
+        const res = await fetch(`${gatewayUrl}/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: item.to, message: item.text }),
+          signal: AbortSignal.timeout(15000),
+        });
+        const resData = await res.json().catch(() => null);
+        console.log(`[WA-DISPATCH] Gateway dispatch to ${item.to}: (HTTP ${res.status})`, resData);
+      } catch (err: any) {
+        console.warn(`[WA-DISPATCH] Gateway dispatch warning for ${item.to}:`, err?.message);
+      }
       
-      // Polite 1.2s delay between sends to prevent burst flagging
-      await new Promise(res => setTimeout(res, 1200));
+      // Polite 1s delay between sends to prevent burst flagging
+      await new Promise(res => setTimeout(res, 1000));
     }
-  } catch (gwErr) {
-    // Gateway offline or connecting
+  } catch (gwErr: any) {
+    console.warn('[WA-DISPATCH] Gateway loop error:', gwErr?.message);
   }
 
   // 1. Direct Free Gateway (CallMeBot) if configured
@@ -258,14 +265,19 @@ export async function dispatchWalkInWhatsAppNotification(walkIn: import('@/types
   const managerLink = `https://wa.me/${managerPhone}?text=${encodeURIComponent(message)}`;
 
   // 0. Dispatch via Linked Device Gateway (Port 3001)
+  const gatewayUrl = `http://127.0.0.1:${process.env.GATEWAY_PORT || '3001'}`;
   try {
-    await fetch('http://127.0.0.1:3001/send', {
+    const res = await fetch(`${gatewayUrl}/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ phone: managerPhone, message }),
-      signal: AbortSignal.timeout(3000),
-    }).catch(() => null);
-  } catch (e) {}
+      signal: AbortSignal.timeout(15000),
+    });
+    const resData = await res.json().catch(() => null);
+    console.log(`[WALK-IN-DISPATCH] Gateway dispatch (HTTP ${res.status}):`, resData);
+  } catch (e: any) {
+    console.warn('[WALK-IN-DISPATCH] Gateway warning:', e?.message);
+  }
 
   // Background dispatch via CallMeBot if key exists
   const callMeBotKey = process.env.CALLMEBOT_API_KEY;

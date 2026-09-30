@@ -2,6 +2,7 @@ import makeWASocket, {
   DisconnectReason,
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
+  Browsers,
 } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import QRCode from 'qrcode';
@@ -40,10 +41,13 @@ async function startWhatsAppSocket() {
     auth: state,
     printQRInTerminal: true,
     logger: pino({ level: 'silent' }),
-    browser: ['PRIZM Salon Desk', 'Chrome', '124.0.0'],
+    browser: Browsers.macOS('Desktop'),
     connectTimeoutMs: 60000,
     defaultQueryTimeoutMs: 60000,
-    keepAliveIntervalMs: 25000,
+    keepAliveIntervalMs: 30000,
+    syncFullHistory: false,
+    markOnlineOnConnect: false,
+    getMessage: async () => undefined,
   });
 
   sock.ev.on('creds.update', saveCreds);
@@ -174,15 +178,26 @@ const server = http.createServer(async (req, res) => {
           return;
         }
 
-        console.log(`[WA-GATEWAY] 🚀 Sending background WhatsApp message to ${jid}...`);
-        const sent = await sock.sendMessage(jid, { text: message });
+        let targetJid = jid;
+        try {
+          const results = await sock.onWhatsApp(jid);
+          if (Array.isArray(results) && results.length > 0 && results[0]?.exists) {
+            targetJid = results[0].jid;
+          }
+        } catch (vErr) {
+          // Non-blocking fallback
+        }
+
+        console.log(`[WA-GATEWAY] 🚀 Sending background WhatsApp message to ${targetJid}...`);
+        const sent = await sock.sendMessage(targetJid, { text: message });
+        console.log(`[WA-GATEWAY] ✓ Message sent successfully to ${targetJid} (Msg ID: ${sent?.key?.id})`);
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(
           JSON.stringify({
             success: true,
             messageId: sent?.key?.id,
-            to: jid,
+            to: targetJid,
           })
         );
       } catch (err) {
