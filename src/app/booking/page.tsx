@@ -660,7 +660,7 @@ function BookingContent() {
                     onClick={() => setPaymentChoice('pay_at_studio')}
                     className={`p-3 rounded-xl border text-left text-xs font-semibold transition-all ${
                       paymentChoice === 'pay_at_studio'
-                        ? 'bg-zinc-800 border-neon-cyan text-white'
+                        ? 'bg-zinc-800 border-neon-cyan text-white shadow-sm'
                         : 'bg-zinc-950 border-surface-border text-zinc-400'
                     }`}
                   >
@@ -668,14 +668,12 @@ function BookingContent() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setPaymentChoice('paid')}
-                    className={`p-3 rounded-xl border text-left text-xs font-semibold transition-all ${
-                      paymentChoice === 'paid'
-                        ? 'bg-zinc-800 border-neon-cyan text-white'
-                        : 'bg-zinc-950 border-surface-border text-zinc-400'
-                    }`}
+                    disabled
+                    aria-disabled="true"
+                    className="p-3 rounded-xl border text-left text-xs font-semibold bg-zinc-950/40 border-zinc-800 text-zinc-500 cursor-not-allowed opacity-60"
                   >
-                    Prepay Online (Instant Confirmation)
+                    <span>Prepay Online (Instant Confirmation)</span>
+                    <span className="block text-[11px] text-zinc-500 font-normal mt-0.5">(Not available at present)</span>
                   </button>
                 </div>
               </div>
