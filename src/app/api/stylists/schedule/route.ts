@@ -1,19 +1,26 @@
 import { NextResponse } from 'next/server';
 import { schedulesStore } from '@/lib/store';
 import { AVAILABLE_SLOTS, STYLISTS } from '@/lib/data';
+import { isSupabaseConfigured, getSupabaseSchedules, saveSupabaseSchedule } from '@/lib/supabase';
+import { StylistSchedule } from '@/types';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const stylistId = searchParams.get('stylistId');
   const dateStr = searchParams.get('date');
 
-  if (!schedulesStore) {
-    return NextResponse.json({ success: false, error: 'Schedule store not initialized' }, { status: 500 });
+  let activeSchedules: Record<string, StylistSchedule> = schedulesStore || {};
+
+  if (isSupabaseConfigured) {
+    const dbSchedules = await getSupabaseSchedules();
+    if (dbSchedules && Object.keys(dbSchedules).length > 0) {
+      activeSchedules = dbSchedules;
+    }
   }
 
   // If specific stylist and date are requested, calculate available slots
   if (stylistId && dateStr) {
-    const schedule = schedulesStore[stylistId];
+    const schedule = activeSchedules[stylistId];
     if (!schedule) {
       return NextResponse.json({
         success: true,
@@ -59,7 +66,7 @@ export async function GET(req: Request) {
   // Return full roster
   return NextResponse.json({
     success: true,
-    schedules: schedulesStore,
+    schedules: activeSchedules,
     stylists: STYLISTS,
     allSlots: AVAILABLE_SLOTS,
   });
@@ -94,6 +101,10 @@ export async function POST(req: Request) {
         reason: reason || (isWorking ? 'Custom Hours' : 'Leave / Studio Training'),
       };
 
+      if (isSupabaseConfigured) {
+        await saveSupabaseSchedule(schedule);
+      }
+
       return NextResponse.json({
         success: true,
         message: `Date override updated for ${schedule.stylistName} on ${dateOverride}`,
@@ -109,6 +120,10 @@ export async function POST(req: Request) {
         customSlots: customSlots && customSlots.length > 0 ? customSlots : undefined,
         notes: notes || undefined,
       };
+
+      if (isSupabaseConfigured) {
+        await saveSupabaseSchedule(schedule);
+      }
 
       return NextResponse.json({
         success: true,

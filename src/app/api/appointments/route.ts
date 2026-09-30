@@ -2,19 +2,34 @@ import { NextResponse } from 'next/server';
 import { appointmentsStore } from '@/lib/store';
 import { Appointment } from '@/types';
 import { dispatchWhatsAppNotification } from '@/lib/whatsapp';
+import { isSupabaseConfigured, getSupabaseAppointments, createSupabaseAppointment } from '@/lib/supabase';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const date = searchParams.get('date');
   const stylist = searchParams.get('stylist');
 
-  let list = appointmentsStore || [];
+  let list: Appointment[] = [];
 
-  if (date) {
-    list = list.filter((a) => a.date === date);
+  if (isSupabaseConfigured) {
+    const dbAppointments = await getSupabaseAppointments({
+      date: date || undefined,
+      stylistName: stylist || undefined,
+    });
+    if (dbAppointments !== null) {
+      list = dbAppointments;
+    }
   }
-  if (stylist) {
-    list = list.filter((a) => a.stylistName.toLowerCase() === stylist.toLowerCase());
+
+  // Fallback to in-memory store if Supabase not configured or returned null
+  if (list.length === 0 && !isSupabaseConfigured) {
+    list = appointmentsStore || [];
+    if (date) {
+      list = list.filter((a) => a.date === date);
+    }
+    if (stylist) {
+      list = list.filter((a) => a.stylistName.toLowerCase() === stylist.toLowerCase());
+    }
   }
 
   return NextResponse.json({
@@ -48,7 +63,7 @@ export async function POST(req: Request) {
     }
 
     // 1. COLLISION DETECTION: Check if the exact stylist is already booked at the exact time slot and date!
-    const isConflict = appointmentsStore.some(
+    const isConflictInMemory = appointmentsStore.some(
       (app) =>
         app.status === 'confirmed' &&
         app.date === date &&
@@ -56,7 +71,7 @@ export async function POST(req: Request) {
         app.stylistName.trim().toLowerCase() === stylistName.trim().toLowerCase()
     );
 
-    if (isConflict) {
+    if (isConflictInMemory) {
       return NextResponse.json(
         {
           success: false,
@@ -89,6 +104,17 @@ export async function POST(req: Request) {
       notes: notes || '',
       createdAt: new Date().toISOString(),
     };
+
+    // Save to Supabase if configured (PostgreSQL will strictly enforce unique constraint as well!)
+    if (isSupabaseConfigured) {
+      const dbResult = await createSupabaseAppointment(newAppointment);
+      if (!dbResult.success && dbResult.error?.includes('Slot Conflict')) {
+        return NextResponse.json(
+          { success: false, error: dbResult.error, conflict: { stylistName, date, timeSlot } },
+          { status: 409 }
+        );
+      }
+    }
 
     // Prepend to salon in-memory records
     appointmentsStore.unshift(newAppointment);

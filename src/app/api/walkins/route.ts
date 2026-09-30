@@ -4,19 +4,34 @@ import { STYLISTS } from '@/lib/data';
 import { WalkInSession, Appointment } from '@/types';
 import { calculateBlockedSlots } from '@/lib/time-utils';
 import { dispatchWalkInWhatsAppNotification } from '@/lib/whatsapp';
+import { isSupabaseConfigured, getSupabaseWalkIns, createSupabaseWalkIn, createSupabaseAppointment } from '@/lib/supabase';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const date = searchParams.get('date');
   const stylistId = searchParams.get('stylistId');
 
-  let list = walkInsStore || [];
+  let list: WalkInSession[] = [];
 
-  if (date) {
-    list = list.filter((w) => w.date === date);
+  if (isSupabaseConfigured) {
+    const dbWalkIns = await getSupabaseWalkIns(date || undefined);
+    if (dbWalkIns !== null) {
+      list = dbWalkIns;
+      if (stylistId) {
+        list = list.filter((w) => w.stylistId.toLowerCase() === stylistId.toLowerCase());
+      }
+    }
   }
-  if (stylistId) {
-    list = list.filter((w) => w.stylistId.toLowerCase() === stylistId.toLowerCase());
+
+  // Fallback to in-memory store
+  if (list.length === 0 && !isSupabaseConfigured) {
+    list = walkInsStore || [];
+    if (date) {
+      list = list.filter((w) => w.date === date);
+    }
+    if (stylistId) {
+      list = list.filter((w) => w.stylistId.toLowerCase() === stylistId.toLowerCase());
+    }
   }
 
   return NextResponse.json({
@@ -130,7 +145,14 @@ export async function POST(req: Request) {
       notes: `Walk-in: ${startTime} to ${endTimeStr} (${duration} mins). Blocked: ${blockedSlots.join(', ')}`,
       createdAt: new Date().toISOString(),
     };
-    appointmentsStore.unshift(primaryApp);
+    // Prepend to walk-in in-memory store
+    walkInsStore.unshift(newWalkIn);
+
+    // Save to Supabase if configured
+    if (isSupabaseConfigured) {
+      await createSupabaseWalkIn(newWalkIn);
+      await createSupabaseAppointment(primaryApp);
+    }
 
     // 2. Also register placeholder blocks for any standard slot in blockedSlots that isn't startTime
     for (const slot of blockedSlots) {
@@ -155,6 +177,10 @@ export async function POST(req: Request) {
           createdAt: new Date().toISOString(),
         };
         appointmentsStore.unshift(slotBlocker);
+
+        if (isSupabaseConfigured) {
+          await createSupabaseAppointment(slotBlocker);
+        }
       }
     }
 
